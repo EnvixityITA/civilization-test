@@ -2,274 +2,244 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>World Simulator</title>
-
+<title>Mini WorldBox Simulator</title>
 <style>
-
-body{
-margin:0;
-background:#111;
-overflow:hidden;
+body { margin:0; overflow:hidden; background:#111; }
+canvas { display:block; image-rendering:pixelated; }
+#ui {
+  position:absolute; top:10px; left:10px; color:white;
+  font-family:sans-serif;
 }
-
-canvas{
-display:block;
-image-rendering:pixelated;
-}
-
+button { margin-right:5px; }
 </style>
 </head>
-
 <body>
+
+<div id="ui">
+  Velocità: 
+  <button onclick="setSpeed(0.5)">Lenta</button>
+  <button onclick="setSpeed(1)">Normale</button>
+  <button onclick="setSpeed(2)">Veloce</button>
+</div>
 
 <canvas id="world"></canvas>
 
 <script>
 
-const SIZE = 800   // mappa molto grande
+const SIZE = 400 // grande mappa
 const canvas = document.getElementById("world")
 const ctx = canvas.getContext("2d")
-
 canvas.width = window.innerWidth
 canvas.height = window.innerHeight
 
-let zoom = 3
-let camX = 0
-let camY = 0
+let zoom = 3, camX=0, camY=0, dragging=false, lastX, lastY
+let speedFactor = 1
 
-const map=[]
-const civs=[]
+const map=[], civs=[], animals=[]
 
-function rand(a,b){
-return Math.random()*(b-a)+a
-}
+function rand(a,b){return Math.random()*(b-a)+a}
 
-function color(){
-return "hsl("+rand(0,360)+",70%,55%)"
-}
-
-/* genera terreno */
+// ---------------------------
+// GENERA TERRITORIO
+// ---------------------------
 
 for(let y=0;y<SIZE;y++){
-
-map[y]=[]
-
-for(let x=0;x<SIZE;x++){
-
-let r=Math.random()
-
-let type="water"
-
-if(r>0.35) type="grass"
-if(r>0.70) type="forest"
-if(r>0.90) type="mountain"
-
-map[y][x]={
-
-type:type,
-owner:null,
-pop:0
-
+  map[y]=[]
+  for(let x=0;x<SIZE;x++){
+    let r = Math.random()
+    let type="water"
+    if(r>0.5) type="grass"
+    if(r>0.75) type="forest"
+    if(r>0.9) type="mountain"
+    if(r>0.92) type="river"
+    map[y][x]={
+      type:type,
+      owner:null,
+      pop:0,
+      buildings:[],
+    }
+  }
 }
 
+// ---------------------------
+// CREA CIVILTÀ
+// ---------------------------
+const names=["Arkon","Belvar","Zerin","Torak","Luneth","Valdor","Kareth","Noran"]
+for(let i=0;i<6;i++){
+  const color = `hsl(${rand(0,360)},70%,50%)`
+  civs.push({id:i,color,color2:color,name:names[i]})
+  // spawn iniziale
+  while(true){
+    let x=Math.floor(rand(0,SIZE))
+    let y=Math.floor(rand(0,SIZE))
+    if(map[y][x].type=="grass"){
+      map[y][x].owner=i
+      map[y][x].pop=50
+      break
+    }
+  }
 }
 
+// ---------------------------
+// ANIMALI
+// ---------------------------
+for(let i=0;i<100;i++){
+  animals.push({
+    x: rand(0,SIZE), y: rand(0,SIZE),
+    color: `hsl(${rand(0,360)},70%,60%)`,
+    dx: rand(-0.3,0.3), dy: rand(-0.3,0.3)
+  })
 }
 
-/* civiltà */
-
-for(let i=0;i<10;i++){
-
-civs.push({
-color:color()
-})
-
-spawn(i)
-
+// ---------------------------
+// DISASTRI
+// ---------------------------
+function triggerDisaster(){
+  let x=Math.floor(rand(0,SIZE))
+  let y=Math.floor(rand(0,SIZE))
+  let r = Math.floor(rand(3,10))
+  for(let yy=y-r; yy<=y+r; yy++){
+    for(let xx=x-r; xx<=x+r; xx++){
+      if(xx>=0 && yy>=0 && xx<SIZE && yy<SIZE){
+        map[yy][xx].owner=null
+        map[yy][xx].pop=0
+        map[yy][xx].buildings=[]
+      }
+    }
+  }
 }
 
-function spawn(id){
-
-let placed=false
-
-while(!placed){
-
-let x=Math.floor(rand(0,SIZE))
-let y=Math.floor(rand(0,SIZE))
-
-if(map[y][x].type=="grass"){
-
-map[y][x].owner=id
-map[y][x].pop=50
-placed=true
-
-}
-
-}
-
-}
-
-/* simulazione */
-
+// ---------------------------
+// SIMULAZIONE
+// ---------------------------
 function step(){
+  // civiltà
+  for(let i=0;i<civs.length;i++){
+    let civ = civs[i]
+    let tiles = []
+    for(let y=0;y<SIZE;y++){
+      for(let x=0;x<SIZE;x++){
+        const t=map[y][x]
+        if(t.owner===i) tiles.push({x,y,tile:t})
+      }
+    }
+    for(let k=0;k<tiles.length;k++){
+      const {x,y,tile}=tiles[k]
+      // crescita popolazione
+      tile.pop+=rand(0.2,0.5)*speedFactor
+      // espansione
+      if(tile.pop>20 && Math.random()<0.01*speedFactor){
+        let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
+        let d = dirs[Math.floor(rand(0,4))]
+        let nx=x+d[0], ny=y+d[1]
+        if(nx>=0 && ny>=0 && nx<SIZE && ny<SIZE){
+          let nTile=map[ny][nx]
+          if(nTile.type!="water" && nTile.type!="mountain"){
+            // foresta rallenta
+            let chance=0.2
+            if(nTile.type=="forest") chance=0.05
+            if(Math.random()<chance){
+              nTile.owner=i
+              nTile.pop=10
+            }
+          }
+        }
+      }
+      // costruzioni
+      if(tile.pop>50 && Math.random()<0.002*speedFactor){
+        tile.buildings.push("house")
+      }
+    }
+  }
 
-for(let y=0;y<SIZE;y++){
-for(let x=0;x<SIZE;x++){
+  // animali
+  for(let i=0;i<animals.length;i++){
+    let a=animals[i]
+    a.x+=a.dx*speedFactor
+    a.y+=a.dy*speedFactor
+    if(a.x<0)a.x=0;if(a.y<0)a.y=0
+    if(a.x>=SIZE)a.x=SIZE-1;if(a.y>=SIZE)a.y=SIZE-1
+    let t = map[Math.floor(a.y)][Math.floor(a.x)]
+    if(t.type=="water" || t.type=="mountain"){a.dx*=-1;a.dy*=-1}
+  }
 
-let t=map[y][x]
-
-if(t.owner!=null){
-
-t.pop+=Math.random()*1.5
-
-let speed=0.02
-
-if(t.type=="forest") speed=0.005
-
-if(t.pop>30 && Math.random()<speed){
-
-expand(x,y)
-
+  // disastri casuali
+  if(Math.random()<0.0005*speedFactor) triggerDisaster()
 }
 
-}
-
-}
-}
-
-}
-
-function expand(x,y){
-
-let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
-let d=dirs[Math.floor(rand(0,4))]
-
-let nx=x+d[0]
-let ny=y+d[1]
-
-if(nx<0||ny<0||nx>=SIZE||ny>=SIZE) return
-
-let from=map[y][x]
-let to=map[ny][nx]
-
-if(to.type=="water") return
-if(to.type=="mountain") return
-
-if(to.owner==null){
-
-to.owner=from.owner
-to.pop=10
-
-}
-else if(to.owner!=from.owner){
-
-if(Math.random()<0.2){
-
-to.owner=from.owner
-to.pop=10
-
-}
-
-}
-
-}
-
-/* disegno */
-
+// ---------------------------
+// DISEGNO
+// ---------------------------
 function draw(){
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-
-let tilesX=Math.ceil(canvas.width/zoom)
-let tilesY=Math.ceil(canvas.height/zoom)
-
-for(let y=0;y<tilesY;y++){
-for(let x=0;x<tilesX;x++){
-
-let mx=Math.floor(x+camX)
-let my=Math.floor(y+camY)
-
-if(mx<0||my<0||mx>=SIZE||my>=SIZE) continue
-
-let t=map[my][mx]
-
-let col="#000"
-
-if(t.type=="water") col="#2a5f9e"
-if(t.type=="grass") col="#3fa34d"
-if(t.type=="forest") col="#2e6e3e"
-if(t.type=="mountain") col="#777"
-
-if(t.owner!=null){
-
-col=civs[t.owner].color
-
+  ctx.clearRect(0,0,canvas.width,canvas.height)
+  const tilesX = Math.ceil(canvas.width/zoom)
+  const tilesY = Math.ceil(canvas.height/zoom)
+  for(let y=0;y<tilesY;y++){
+    for(let x=0;x<tilesX;x++){
+      let mx=Math.floor(x+camX)
+      let my=Math.floor(y+camY)
+      if(mx>=SIZE || my>=SIZE || mx<0 || my<0) continue
+      let t=map[my][mx]
+      let col="#000"
+      if(t.type=="water") col="#2a5f9e"
+      if(t.type=="grass") col="#3fa34d"
+      if(t.type=="forest") col="#2e6e3e"
+      if(t.type=="mountain") col="#777"
+      if(t.type=="river") col="#1f90ff"
+      if(t.owner!=null) col=civs[t.owner].color
+      ctx.fillStyle=col
+      ctx.fillRect(x*zoom,y*zoom,zoom,zoom)
+      // costruzioni
+      if(t.buildings.length>0){
+        ctx.fillStyle="#aaaa00"
+        ctx.fillRect(x*zoom,y*zoom,zoom,zoom)
+      }
+    }
+  }
+  // animali
+  for(let i=0;i<animals.length;i++){
+    let a=animals[i]
+    let px=(a.x-camX)*zoom
+    let py=(a.y-camY)*zoom
+    ctx.fillStyle=a.color
+    ctx.fillRect(px,py,zoom,zoom)
+  }
 }
 
-ctx.fillStyle=col
-
-ctx.fillRect(
-x*zoom,
-y*zoom,
-zoom,
-zoom
-)
-
-}
-}
-
-}
-
-/* zoom */
-
-canvas.addEventListener("wheel",e=>{
-
-if(e.deltaY>0) zoom*=0.9
-else zoom*=1.1
-
-zoom=Math.max(1,Math.min(20,zoom))
-
-})
-
-/* movimento camera */
-
-let dragging=false
-let lastX,lastY
-
-canvas.addEventListener("mousedown",e=>{
-dragging=true
-lastX=e.clientX
-lastY=e.clientY
-})
-
-canvas.addEventListener("mouseup",()=>dragging=false)
-
-canvas.addEventListener("mousemove",e=>{
-
-if(dragging){
-
-camX-=(e.clientX-lastX)/zoom
-camY-=(e.clientY-lastY)/zoom
-
-lastX=e.clientX
-lastY=e.clientY
-
-}
-
-})
-
-/* loop */
-
+// ---------------------------
+// LOOP
+// ---------------------------
 function loop(){
-
-step()
-draw()
-
-requestAnimationFrame(loop)
-
+  for(let i=0;i<speedFactor;i++) step()
+  draw()
+  requestAnimationFrame(loop)
 }
-
 loop()
+
+// ---------------------------
+// ZOOM e CAMERA
+// ---------------------------
+canvas.addEventListener("wheel",e=>{
+  if(e.deltaY>0) zoom*=0.9
+  else zoom*=1.1
+  zoom=Math.max(1,Math.min(20,zoom))
+})
+canvas.addEventListener("mousedown",e=>{
+  dragging=true; lastX=e.clientX; lastY=e.clientY
+})
+canvas.addEventListener("mouseup",()=>dragging=false)
+canvas.addEventListener("mousemove",e=>{
+  if(dragging){
+    camX-=(e.clientX-lastX)/zoom
+    camY-=(e.clientY-lastY)/zoom
+    lastX=e.clientX; lastY=e.clientY
+  }
+})
+
+// ---------------------------
+// CAMBIO VELOCITÀ
+// ---------------------------
+function setSpeed(f){speedFactor=f}
 
 </script>
 
