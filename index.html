@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini Civilization Simulator</title>
+<style>
+body{
+    background:#111;
+    color:white;
+    text-align:center;
+    font-family:sans-serif;
+}
+
+#map{
+    display:grid;
+    grid-template-columns:repeat(50,10px);
+    width:500px;
+    margin:auto;
+}
+
+.cell{
+    width:10px;
+    height:10px;
+    background:#222;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Mini Civilization Simulator</h2>
+<div id="map"></div>
+
+<script>
+
+const size = 50
+const map = []
+const civs = ["red","blue","green","yellow"]
+
+const mapDiv = document.getElementById("map")
+
+// create grid
+for(let y=0;y<size;y++){
+    map[y]=[]
+    for(let x=0;x<size;x++){
+
+        const cell=document.createElement("div")
+        cell.className="cell"
+
+        mapDiv.appendChild(cell)
+
+        map[y][x]={
+            owner:null,
+            el:cell
+        }
+    }
+}
+
+// spawn civilizations
+function spawn(){
+
+    for(let i=0;i<civs.length;i++){
+
+        const x=Math.floor(Math.random()*size)
+        const y=Math.floor(Math.random()*size)
+
+        map[y][x].owner=civs[i]
+    }
+
+}
+
+spawn()
+
+function update(){
+
+    for(let y=0;y<size;y++){
+        for(let x=0;x<size;x++){
+
+            const tile=map[y][x]
+
+            if(tile.owner){
+
+                const dirs=[
+                    [1,0],[-1,0],[0,1],[0,-1]
+                ]
+
+                const d=dirs[Math.floor(Math.random()*4)]
+
+                const nx=x+d[0]
+                const ny=y+d[1]
+
+                if(nx>=0 && ny>=0 && nx<size && ny<size){
+
+                    const target=map[ny][nx]
+
+                    if(Math.random()<0.3){
+                        target.owner=tile.owner
+                    }
+
+                }
+
+            }
+
+        }
+    }
+
+    draw()
+}
+
+function draw(){
+
+    for(let y=0;y<size;y++){
+        for(let x=0;x<size;x++){
+
+            const tile=map[y][x]
+
+            tile.el.style.background=
+                tile.owner?tile.owner:"#222"
+
+        }
+    }
+
+}
+
+setInterval(update,100)
+
+</script>
+
+</body>
+</html>
