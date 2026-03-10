@@ -2,80 +2,77 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini WorldBox Simulator</title>
+<title>Mini WorldBox Simulator Advanced</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; }
 canvas { display:block; image-rendering:pixelated; }
 #ui {
   position:absolute; top:10px; left:10px; color:white;
   font-family:sans-serif;
+  z-index:10;
 }
 button { margin-right:5px; }
 </style>
 </head>
 <body>
-
 <div id="ui">
   Velocità: 
   <button onclick="setSpeed(0.5)">Lenta</button>
   <button onclick="setSpeed(1)">Normale</button>
   <button onclick="setSpeed(2)">Veloce</button>
 </div>
-
 <canvas id="world"></canvas>
 
 <script>
+const SIZE = 400;
+const canvas = document.getElementById("world");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-const SIZE = 400 // grande mappa
-const canvas = document.getElementById("world")
-const ctx = canvas.getContext("2d")
-canvas.width = window.innerWidth
-canvas.height = window.innerHeight
+let zoom = 3, camX=0, camY=0, dragging=false, lastX, lastY;
+let speedFactor = 1;
+let mouseX = canvas.width/2, mouseY = canvas.height/2;
 
-let zoom = 3, camX=0, camY=0, dragging=false, lastX, lastY
-let speedFactor = 1
+const map=[], civs=[], animals=[];
 
-const map=[], civs=[], animals=[]
-
-function rand(a,b){return Math.random()*(b-a)+a}
+// ---------------------------
+// UTIL
+// ---------------------------
+function rand(a,b){return Math.random()*(b-a)+a;}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
 // ---------------------------
 // GENERA TERRITORIO
 // ---------------------------
-
 for(let y=0;y<SIZE;y++){
   map[y]=[]
   for(let x=0;x<SIZE;x++){
-    let r = Math.random()
-    let type="water"
-    if(r>0.5) type="grass"
-    if(r>0.75) type="forest"
-    if(r>0.9) type="mountain"
-    if(r>0.92) type="river"
-    map[y][x]={
-      type:type,
-      owner:null,
-      pop:0,
-      buildings:[],
-    }
+    let r = Math.random();
+    let type="water";
+    if(r>0.5) type="grass";
+    if(r>0.75) type="forest";
+    if(r>0.9) type="mountain";
+    if(r>0.92) type="river";
+    map[y][x]={type:type, owner:null, pop:0, buildings:[], disaster:false};
   }
 }
 
 // ---------------------------
-// CREA CIVILTÀ
+// CIVILTÀ
 // ---------------------------
-const names=["Arkon","Belvar","Zerin","Torak","Luneth","Valdor","Kareth","Noran"]
+const names=["Arkon","Belvar","Zerin","Torak","Luneth","Valdor","Kareth","Noran"];
 for(let i=0;i<6;i++){
-  const color = `hsl(${rand(0,360)},70%,50%)`
-  civs.push({id:i,color,color2:color,name:names[i]})
+  const color = `hsl(${rand(0,360)},70%,50%)`;
+  civs.push({id:i,color,color2:color,name:names[i]});
   // spawn iniziale
   while(true){
-    let x=Math.floor(rand(0,SIZE))
-    let y=Math.floor(rand(0,SIZE))
+    let x=Math.floor(rand(0,SIZE));
+    let y=Math.floor(rand(0,SIZE));
     if(map[y][x].type=="grass"){
-      map[y][x].owner=i
-      map[y][x].pop=50
-      break
+      map[y][x].owner=i;
+      map[y][x].pop=50;
+      break;
     }
   }
 }
@@ -88,22 +85,23 @@ for(let i=0;i<100;i++){
     x: rand(0,SIZE), y: rand(0,SIZE),
     color: `hsl(${rand(0,360)},70%,60%)`,
     dx: rand(-0.3,0.3), dy: rand(-0.3,0.3)
-  })
+  });
 }
 
 // ---------------------------
 // DISASTRI
 // ---------------------------
 function triggerDisaster(){
-  let x=Math.floor(rand(0,SIZE))
-  let y=Math.floor(rand(0,SIZE))
-  let r = Math.floor(rand(3,10))
+  let x=Math.floor(rand(0,SIZE));
+  let y=Math.floor(rand(0,SIZE));
+  let r = Math.floor(rand(3,10));
   for(let yy=y-r; yy<=y+r; yy++){
     for(let xx=x-r; xx<=x+r; xx++){
       if(xx>=0 && yy>=0 && xx<SIZE && yy<SIZE){
-        map[yy][xx].owner=null
-        map[yy][xx].pop=0
-        map[yy][xx].buildings=[]
+        map[yy][xx].owner=null;
+        map[yy][xx].pop=0;
+        map[yy][xx].buildings=[];
+        map[yy][xx].disaster=true;
       }
     }
   }
@@ -115,94 +113,94 @@ function triggerDisaster(){
 function step(){
   // civiltà
   for(let i=0;i<civs.length;i++){
-    let civ = civs[i]
-    let tiles = []
+    let civ = civs[i];
+    let tiles = [];
     for(let y=0;y<SIZE;y++){
       for(let x=0;x<SIZE;x++){
-        const t=map[y][x]
-        if(t.owner===i) tiles.push({x,y,tile:t})
+        const t=map[y][x];
+        if(t.owner===i) tiles.push({x,y,tile:t});
       }
     }
     for(let k=0;k<tiles.length;k++){
-      const {x,y,tile}=tiles[k]
-      // crescita popolazione
-      tile.pop+=rand(0.2,0.5)*speedFactor
+      const {x,y,tile}=tiles[k];
+      tile.pop+=rand(0.2,0.5)*speedFactor;
       // espansione
       if(tile.pop>20 && Math.random()<0.01*speedFactor){
-        let dirs=[[1,0],[-1,0],[0,1],[0,-1]]
-        let d = dirs[Math.floor(rand(0,4))]
-        let nx=x+d[0], ny=y+d[1]
+        let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+        let d = dirs[Math.floor(rand(0,4))];
+        let nx=x+d[0], ny=y+d[1];
         if(nx>=0 && ny>=0 && nx<SIZE && ny<SIZE){
-          let nTile=map[ny][nx]
+          let nTile=map[ny][nx];
           if(nTile.type!="water" && nTile.type!="mountain"){
-            // foresta rallenta
-            let chance=0.2
-            if(nTile.type=="forest") chance=0.05
+            let chance=0.2; if(nTile.type=="forest") chance=0.05;
             if(Math.random()<chance){
-              nTile.owner=i
-              nTile.pop=10
+              nTile.owner=i; nTile.pop=10;
             }
           }
         }
       }
       // costruzioni
       if(tile.pop>50 && Math.random()<0.002*speedFactor){
-        tile.buildings.push("house")
+        tile.buildings.push("house");
       }
     }
   }
 
   // animali
   for(let i=0;i<animals.length;i++){
-    let a=animals[i]
-    a.x+=a.dx*speedFactor
-    a.y+=a.dy*speedFactor
-    if(a.x<0)a.x=0;if(a.y<0)a.y=0
-    if(a.x>=SIZE)a.x=SIZE-1;if(a.y>=SIZE)a.y=SIZE-1
-    let t = map[Math.floor(a.y)][Math.floor(a.x)]
+    let a=animals[i];
+    a.x+=a.dx*speedFactor;
+    a.y+=a.dy*speedFactor;
+    a.x=clamp(a.x,0,SIZE-1); a.y=clamp(a.y,0,SIZE-1);
+    let t = map[Math.floor(a.y)][Math.floor(a.x)];
     if(t.type=="water" || t.type=="mountain"){a.dx*=-1;a.dy*=-1}
   }
 
   // disastri casuali
-  if(Math.random()<0.0005*speedFactor) triggerDisaster()
+  if(Math.random()<0.0005*speedFactor) triggerDisaster();
 }
 
 // ---------------------------
 // DISEGNO
 // ---------------------------
 function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height)
-  const tilesX = Math.ceil(canvas.width/zoom)
-  const tilesY = Math.ceil(canvas.height/zoom)
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const tilesX = Math.ceil(canvas.width/zoom);
+  const tilesY = Math.ceil(canvas.height/zoom);
   for(let y=0;y<tilesY;y++){
     for(let x=0;x<tilesX;x++){
-      let mx=Math.floor(x+camX)
-      let my=Math.floor(y+camY)
-      if(mx>=SIZE || my>=SIZE || mx<0 || my<0) continue
-      let t=map[my][mx]
-      let col="#000"
-      if(t.type=="water") col="#2a5f9e"
-      if(t.type=="grass") col="#3fa34d"
-      if(t.type=="forest") col="#2e6e3e"
-      if(t.type=="mountain") col="#777"
-      if(t.type=="river") col="#1f90ff"
-      if(t.owner!=null) col=civs[t.owner].color
-      ctx.fillStyle=col
-      ctx.fillRect(x*zoom,y*zoom,zoom,zoom)
+      let mx=Math.floor(x+camX);
+      let my=Math.floor(y+camY);
+      if(mx>=SIZE || my>=SIZE || mx<0 || my<0) continue;
+      let t=map[my][mx];
+      let col="#000";
+      if(t.type=="water") col="#2a5f9e";
+      if(t.type=="grass") col="#3fa34d";
+      if(t.type=="forest") col="#2e6e3e";
+      if(t.type=="mountain") col="#777";
+      if(t.type=="river") col="#1f90ff";
+      if(t.owner!=null) col=civs[t.owner].color;
+      ctx.fillStyle=col; ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
       // costruzioni
       if(t.buildings.length>0){
-        ctx.fillStyle="#aaaa00"
-        ctx.fillRect(x*zoom,y*zoom,zoom,zoom)
+        ctx.fillStyle="#aaaa00";
+        ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
+      }
+      // disastri
+      if(t.disaster){
+        ctx.fillStyle="#ff3300";
+        ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
+        t.disaster=false;
       }
     }
   }
+
   // animali
   for(let i=0;i<animals.length;i++){
-    let a=animals[i]
-    let px=(a.x-camX)*zoom
-    let py=(a.y-camY)*zoom
-    ctx.fillStyle=a.color
-    ctx.fillRect(px,py,zoom,zoom)
+    let a=animals[i];
+    let px=(a.x-camX)*zoom, py=(a.y-camY)*zoom;
+    ctx.fillStyle=a.color;
+    ctx.fillRect(px,py,zoom,zoom);
   }
 }
 
@@ -210,38 +208,42 @@ function draw(){
 // LOOP
 // ---------------------------
 function loop(){
-  for(let i=0;i<speedFactor;i++) step()
-  draw()
-  requestAnimationFrame(loop)
+  for(let i=0;i<speedFactor;i++) step();
+  draw();
+  requestAnimationFrame(loop);
 }
-loop()
+loop();
 
 // ---------------------------
 // ZOOM e CAMERA
 // ---------------------------
 canvas.addEventListener("wheel",e=>{
-  if(e.deltaY>0) zoom*=0.9
-  else zoom*=1.1
-  zoom=Math.max(1,Math.min(20,zoom))
-})
-canvas.addEventListener("mousedown",e=>{
-  dragging=true; lastX=e.clientX; lastY=e.clientY
-})
-canvas.addEventListener("mouseup",()=>dragging=false)
+  // zoom centrato sul mouse
+  const worldX = camX + mouseX/zoom;
+  const worldY = camY + mouseY/zoom;
+  if(e.deltaY>0) zoom*=0.9; else zoom*=1.1;
+  zoom=Math.max(1,Math.min(20,zoom));
+  camX = worldX - mouseX/zoom;
+  camY = worldY - mouseY/zoom;
+});
+
+canvas.addEventListener("mousemove",e=>{ mouseX=e.clientX; mouseY=e.clientY; });
+
+canvas.addEventListener("mousedown",e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
+canvas.addEventListener("mouseup",()=>dragging=false);
 canvas.addEventListener("mousemove",e=>{
   if(dragging){
-    camX-=(e.clientX-lastX)/zoom
-    camY-=(e.clientY-lastY)/zoom
-    lastX=e.clientX; lastY=e.clientY
+    camX-=(e.clientX-lastX)/zoom;
+    camY-=(e.clientY-lastY)/zoom;
+    lastX=e.clientX; lastY=e.clientY;
   }
-})
+});
 
 // ---------------------------
-// CAMBIO VELOCITÀ
+// VELOCITÀ TEMPO
 // ---------------------------
 function setSpeed(f){speedFactor=f}
 
 </script>
-
 </body>
 </html>
