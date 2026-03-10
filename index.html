@@ -2,32 +2,43 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Civilization Simulator</title>
+<title>2.5D Civilization Simulator</title>
 
 <style>
 
 body{
-background:#0f0f0f;
+background:#0e0e0e;
 color:white;
 font-family:sans-serif;
 text-align:center;
+overflow:hidden;
 }
 
-#map{
+#world{
+position:absolute;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%) rotateX(60deg);
 display:grid;
-grid-template-columns:repeat(80,8px);
-width:640px;
-margin:auto;
+grid-template-columns:repeat(60,20px);
 }
 
-.cell{
-width:8px;
-height:8px;
-background:#1a1a1a;
+.tile{
+
+width:20px;
+height:20px;
+
+transform-style:preserve-3d;
+
 }
 
-#stats{
-margin:20px;
+.block{
+
+width:100%;
+height:100%;
+
+box-shadow:0 0 2px black;
+
 }
 
 </style>
@@ -35,46 +46,59 @@ margin:20px;
 
 <body>
 
-<h2>Autonomous Civilization Simulator</h2>
+<h2>2.5D Civilization Simulator</h2>
 
-<div id="stats"></div>
-<div id="map"></div>
+<div id="world"></div>
 
 <script>
 
-const SIZE = 80
-const CIV_START = 6
+const SIZE=60
 
-const map=[]
+const world=[]
 const civs=[]
 
-const mapDiv=document.getElementById("map")
-const statsDiv=document.getElementById("stats")
+const worldDiv=document.getElementById("world")
 
 function randomColor(){
 
-return "hsl("+Math.floor(Math.random()*360)+",70%,55%)"
+return "hsl("+Math.random()*360+",70%,55%)"
 
 }
 
-// create grid
+// create civs
+
+for(let i=0;i<6;i++){
+
+civs.push({
+id:i,
+color:randomColor()
+})
+
+}
+
+// generate map
 
 for(let y=0;y<SIZE;y++){
 
-map[y]=[]
+world[y]=[]
 
 for(let x=0;x<SIZE;x++){
 
-const cell=document.createElement("div")
-cell.className="cell"
-mapDiv.appendChild(cell)
+const tile=document.createElement("div")
+tile.className="tile"
 
-map[y][x]={
+const block=document.createElement("div")
+block.className="block"
 
+tile.appendChild(block)
+
+worldDiv.appendChild(tile)
+
+world[y][x]={
+
+height:Math.random(),
 owner:null,
-pop:0,
-city:false,
-el:cell
+el:block
 
 }
 
@@ -82,34 +106,14 @@ el:cell
 
 }
 
-function createCiv(){
+// spawn civs
 
-return{
+for(let i=0;i<civs.length;i++){
 
-id:civs.length,
-color:randomColor(),
-population:0,
-cities:0
+let x=Math.floor(Math.random()*SIZE)
+let y=Math.floor(Math.random()*SIZE)
 
-}
-
-}
-
-// spawn civilizations
-
-for(let i=0;i<CIV_START;i++){
-
-const civ=createCiv()
-civs.push(civ)
-
-const x=Math.floor(Math.random()*SIZE)
-const y=Math.floor(Math.random()*SIZE)
-
-const tile=map[y][x]
-
-tile.owner=civ.id
-tile.city=true
-tile.pop=50
+world[y][x].owner=i
 
 }
 
@@ -118,106 +122,74 @@ tile.pop=50
 function step(){
 
 for(let y=0;y<SIZE;y++){
-
 for(let x=0;x<SIZE;x++){
 
-const tile=map[y][x]
+const tile=world[y][x]
 
 if(tile.owner!=null){
 
-tile.pop+=Math.random()*2
-
-// expansion
-
-if(tile.pop>30){
-
-spread(x,y)
-
-}
-
-// new city
-
-if(tile.pop>80 && Math.random()<0.01){
-
-tile.city=true
-
-}
-
-// collapse
-
-if(tile.pop<5 && Math.random()<0.02){
-
-tile.owner=null
-tile.pop=0
-tile.city=false
+expand(x,y)
 
 }
 
 }
-
-}
-
 }
 
 draw()
-updateStats()
 
 }
 
-function spread(x,y){
+// expansion
+
+function expand(x,y){
 
 const dirs=[[1,0],[-1,0],[0,1],[0,-1]]
 
-const d=dirs[Math.floor(Math.random()*dirs.length)]
+const d=dirs[Math.floor(Math.random()*4)]
 
 const nx=x+d[0]
 const ny=y+d[1]
 
 if(nx<0||ny<0||nx>=SIZE||ny>=SIZE) return
 
-const tile=map[ny][nx]
-const from=map[y][x]
+const from=world[y][x]
+const target=world[ny][nx]
 
-if(tile.owner==null){
+if(target.owner==null){
 
-tile.owner=from.owner
-tile.pop=10
+target.owner=from.owner
 
 }
 
-else if(tile.owner!=from.owner){
+else if(target.owner!=from.owner){
 
 if(Math.random()<0.3){
 
-tile.owner=from.owner
-tile.pop=10
+target.owner=from.owner
 
 }
 
 }
 
 }
+
+// draw
 
 function draw(){
 
 for(let y=0;y<SIZE;y++){
-
 for(let x=0;x<SIZE;x++){
 
-const tile=map[y][x]
+const tile=world[y][x]
 
 if(tile.owner==null){
 
-tile.el.style.background="#1a1a1a"
+tile.el.style.background="#2f5e2f"
 
 }else{
 
 tile.el.style.background=civs[tile.owner].color
 
-if(tile.city){
-
-tile.el.style.background="white"
-
 }
 
 }
@@ -226,44 +198,7 @@ tile.el.style.background="white"
 
 }
 
-}
-
-function updateStats(){
-
-let text=""
-
-civs.forEach((c,i)=>{
-
-let territory=0
-let cities=0
-let pop=0
-
-for(let y=0;y<SIZE;y++){
-for(let x=0;x<SIZE;x++){
-
-const t=map[y][x]
-
-if(t.owner==i){
-
-territory++
-pop+=t.pop
-
-if(t.city) cities++
-
-}
-
-}
-}
-
-text+=`Civ ${i} | Territory: ${territory} | Cities: ${cities} | Pop: ${Math.floor(pop)}<br>`
-
-})
-
-statsDiv.innerHTML=text
-
-}
-
-setInterval(step,100)
+setInterval(step,150)
 
 </script>
 
