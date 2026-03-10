@@ -2,69 +2,64 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini WorldBox Simulator Advanced</title>
+<title>Mini WorldBox Final</title>
 <style>
 body { margin:0; overflow:hidden; background:#111; }
 canvas { display:block; image-rendering:pixelated; }
 #ui {
   position:absolute; top:10px; left:10px; color:white;
-  font-family:sans-serif;
-  z-index:10;
+  font-family:sans-serif; z-index:10;
 }
 button { margin-right:5px; }
 </style>
 </head>
 <body>
+
 <div id="ui">
-  Velocità: 
-  <button onclick="setSpeed(0.5)">Lenta</button>
-  <button onclick="setSpeed(1)">Normale</button>
-  <button onclick="setSpeed(2)">Veloce</button>
+Velocità: 
+<button onclick="setSpeed(0.5)">Lenta</button>
+<button onclick="setSpeed(1)">Normale</button>
+<button onclick="setSpeed(2)">Veloce</button>
 </div>
+
 <canvas id="world"></canvas>
 
 <script>
-const SIZE = 400;
+const SIZE = 300;
 const canvas = document.getElementById("world");
 const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-let zoom = 3, camX=0, camY=0, dragging=false, lastX, lastY;
+let zoom = 4, camX=0, camY=0, dragging=false, lastX, lastY;
+let mouseX=canvas.width/2, mouseY=canvas.height/2;
 let speedFactor = 1;
-let mouseX = canvas.width/2, mouseY = canvas.height/2;
 
-const map=[], civs=[], animals=[];
+const map=[], civs=[], units=[];
 
-// ---------------------------
-// UTIL
-// ---------------------------
+// -------------------- UTIL --------------------
 function rand(a,b){return Math.random()*(b-a)+a;}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
-// ---------------------------
-// GENERA TERRITORIO
-// ---------------------------
+// -------------------- TERRITORIO --------------------
 for(let y=0;y<SIZE;y++){
-  map[y]=[]
+  map[y]=[];
   for(let x=0;x<SIZE;x++){
-    let r = Math.random();
+    let r=Math.random();
     let type="water";
     if(r>0.5) type="grass";
     if(r>0.75) type="forest";
     if(r>0.9) type="mountain";
     if(r>0.92) type="river";
-    map[y][x]={type:type, owner:null, pop:0, buildings:[], disaster:false};
+    map[y][x]={type:type, owner:null, pop:0, buildings:[], city:false, disaster:false};
   }
 }
 
-// ---------------------------
-// CIVILTÀ
-// ---------------------------
-const names=["Arkon","Belvar","Zerin","Torak","Luneth","Valdor","Kareth","Noran"];
+// -------------------- CIVILTÀ --------------------
+const names=["Arkon","Belvar","Zerin","Torak","Luneth","Valdor"];
 for(let i=0;i<6;i++){
-  const color = `hsl(${rand(0,360)},70%,50%)`;
-  civs.push({id:i,color,color2:color,name:names[i]});
+  const color=`hsl(${rand(0,360)},70%,50%)`;
+  civs.push({id:i,color,name:names[i]});
   // spawn iniziale
   while(true){
     let x=Math.floor(rand(0,SIZE));
@@ -72,106 +67,118 @@ for(let i=0;i<6;i++){
     if(map[y][x].type=="grass"){
       map[y][x].owner=i;
       map[y][x].pop=50;
+      map[y][x].buildings.push("house");
+      map[y][x].city=true;
+      // spawn unità iniziale
+      units.push({x:x+0.5, y:y+0.5, civ:i, color:color, type:"human"});
       break;
     }
   }
 }
 
-// ---------------------------
-// ANIMALI
-// ---------------------------
-for(let i=0;i<100;i++){
-  animals.push({
+// -------------------- ANIMALI --------------------
+for(let i=0;i<80;i++){
+  units.push({
     x: rand(0,SIZE), y: rand(0,SIZE),
-    color: `hsl(${rand(0,360)},70%,60%)`,
-    dx: rand(-0.3,0.3), dy: rand(-0.3,0.3)
+    civ:null, color:`hsl(${rand(0,360)},70%,60%)`, type:"animal",
+    dx:rand(-0.3,0.3), dy:rand(-0.3,0.3)
   });
 }
 
-// ---------------------------
-// DISASTRI
-// ---------------------------
+// -------------------- DISASTRI --------------------
 function triggerDisaster(){
   let x=Math.floor(rand(0,SIZE));
   let y=Math.floor(rand(0,SIZE));
-  let r = Math.floor(rand(3,10));
+  let r=Math.floor(rand(3,8));
   for(let yy=y-r; yy<=y+r; yy++){
     for(let xx=x-r; xx<=x+r; xx++){
       if(xx>=0 && yy>=0 && xx<SIZE && yy<SIZE){
         map[yy][xx].owner=null;
         map[yy][xx].pop=0;
         map[yy][xx].buildings=[];
+        map[yy][xx].city=false;
         map[yy][xx].disaster=true;
       }
     }
   }
 }
 
-// ---------------------------
-// SIMULAZIONE
-// ---------------------------
+// -------------------- SIMULAZIONE --------------------
 function step(){
-  // civiltà
-  for(let i=0;i<civs.length;i++){
-    let civ = civs[i];
-    let tiles = [];
-    for(let y=0;y<SIZE;y++){
-      for(let x=0;x<SIZE;x++){
-        const t=map[y][x];
-        if(t.owner===i) tiles.push({x,y,tile:t});
-      }
-    }
-    for(let k=0;k<tiles.length;k++){
-      const {x,y,tile}=tiles[k];
-      tile.pop+=rand(0.2,0.5)*speedFactor;
-      // espansione
-      if(tile.pop>20 && Math.random()<0.01*speedFactor){
-        let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-        let d = dirs[Math.floor(rand(0,4))];
-        let nx=x+d[0], ny=y+d[1];
-        if(nx>=0 && ny>=0 && nx<SIZE && ny<SIZE){
-          let nTile=map[ny][nx];
-          if(nTile.type!="water" && nTile.type!="mountain"){
-            let chance=0.2; if(nTile.type=="forest") chance=0.05;
-            if(Math.random()<chance){
-              nTile.owner=i; nTile.pop=10;
+  // 1) Espansione automatica dei territori
+  for(let y=0;y<SIZE;y++){
+    for(let x=0;x<SIZE;x++){
+      let t = map[y][x];
+      if(t.owner!=null){
+        t.pop += rand(0.2,0.5)*speedFactor;
+        if(t.pop>20 && Math.random()<0.01*speedFactor){
+          let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+          let d=dirs[Math.floor(rand(0,4))];
+          let nx=x+d[0], ny=y+d[1];
+          if(nx>=0 && ny>=0 && nx<SIZE && ny<SIZE){
+            let nTile = map[ny][nx];
+            if(nTile.type!="water" && nTile.type!="mountain" && nTile.owner!=t.owner){
+              let chance = (nTile.type=="forest") ? 0.05 : 0.2;
+              if(Math.random()<chance){
+                nTile.owner=t.owner;
+                nTile.pop=10;
+              }
             }
           }
         }
-      }
-      // costruzioni
-      if(tile.pop>50 && Math.random()<0.002*speedFactor){
-        tile.buildings.push("house");
+        // crescita costruzioni e città
+        if(t.pop>50 && t.buildings.length<5 && Math.random()<0.002*speedFactor){
+          t.buildings.push("house");
+        }
+        if(t.buildings.length>=3 && !t.city){
+          t.city=true;
+        }
       }
     }
   }
 
-  // animali
-  for(let i=0;i<animals.length;i++){
-    let a=animals[i];
-    a.x+=a.dx*speedFactor;
-    a.y+=a.dy*speedFactor;
-    a.x=clamp(a.x,0,SIZE-1); a.y=clamp(a.y,0,SIZE-1);
-    let t = map[Math.floor(a.y)][Math.floor(a.x)];
-    if(t.type=="water" || t.type=="mountain"){a.dx*=-1;a.dy*=-1}
+  // 2) Movimento unità
+  for(let i=0;i<units.length;i++){
+    let u=units[i];
+    if(u.type=="human"){
+      // movimento casuale per umani
+      let speed=0.1*speedFactor;
+      if(map[Math.floor(u.y)][Math.floor(u.x)].type=="forest") speed=0.03*speedFactor;
+      let dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+      let d=dirs[Math.floor(rand(0,4))];
+      let nx=u.x+d[0]*speed, ny=u.y+d[1]*speed;
+      if(nx>=0 && ny>=0 && nx<SIZE && ny<SIZE && map[Math.floor(ny)][Math.floor(nx)].type!="mountain" && map[Math.floor(ny)][Math.floor(nx)].type!="water"){
+        u.x=nx; u.y=ny;
+        // conquista tile
+        let tile=map[Math.floor(u.y)][Math.floor(u.x)];
+        if(tile.owner!=u.civ){
+          tile.owner=u.civ;
+        }
+      }
+    } else if(u.type=="animal"){
+      u.x+=u.dx*speedFactor;
+      u.y+=u.dy*speedFactor;
+      if(u.x<0||u.y<0||u.x>=SIZE||u.y>=SIZE){ u.dx*=-1; u.dy*=-1; }
+      let t = map[Math.floor(u.y)][Math.floor(u.x)];
+      if(t.type=="water" || t.type=="mountain"){ u.dx*=-1; u.dy*=-1; }
+    }
   }
 
-  // disastri casuali
+  // 3) Disastri casuali
   if(Math.random()<0.0005*speedFactor) triggerDisaster();
 }
 
-// ---------------------------
-// DISEGNO
-// ---------------------------
+// -------------------- DISEGNO --------------------
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  const tilesX = Math.ceil(canvas.width/zoom);
-  const tilesY = Math.ceil(canvas.height/zoom);
+  const tilesX=Math.ceil(canvas.width/zoom);
+  const tilesY=Math.ceil(canvas.height/zoom);
+
   for(let y=0;y<tilesY;y++){
     for(let x=0;x<tilesX;x++){
       let mx=Math.floor(x+camX);
       let my=Math.floor(y+camY);
-      if(mx>=SIZE || my>=SIZE || mx<0 || my<0) continue;
+      if(mx<0||my<0||mx>=SIZE||my>=SIZE) continue;
       let t=map[my][mx];
       let col="#000";
       if(t.type=="water") col="#2a5f9e";
@@ -180,10 +187,11 @@ function draw(){
       if(t.type=="mountain") col="#777";
       if(t.type=="river") col="#1f90ff";
       if(t.owner!=null) col=civs[t.owner].color;
-      ctx.fillStyle=col; ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
-      // costruzioni
+      ctx.fillStyle=col;
+      ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
+      // case e città
       if(t.buildings.length>0){
-        ctx.fillStyle="#aaaa00";
+        ctx.fillStyle=(t.city)?"#ffffff":"#ffff00";
         ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
       }
       // disastri
@@ -195,18 +203,16 @@ function draw(){
     }
   }
 
-  // animali
-  for(let i=0;i<animals.length;i++){
-    let a=animals[i];
-    let px=(a.x-camX)*zoom, py=(a.y-camY)*zoom;
-    ctx.fillStyle=a.color;
+  // disegno unità
+  for(let i=0;i<units.length;i++){
+    let u=units[i];
+    let px=(u.x-camX)*zoom, py=(u.y-camY)*zoom;
+    ctx.fillStyle=u.color;
     ctx.fillRect(px,py,zoom,zoom);
   }
 }
 
-// ---------------------------
-// LOOP
-// ---------------------------
+// -------------------- LOOP --------------------
 function loop(){
   for(let i=0;i<speedFactor;i++) step();
   draw();
@@ -214,21 +220,16 @@ function loop(){
 }
 loop();
 
-// ---------------------------
-// ZOOM e CAMERA
-// ---------------------------
+// -------------------- ZOOM E CAMERA --------------------
 canvas.addEventListener("wheel",e=>{
-  // zoom centrato sul mouse
   const worldX = camX + mouseX/zoom;
   const worldY = camY + mouseY/zoom;
   if(e.deltaY>0) zoom*=0.9; else zoom*=1.1;
-  zoom=Math.max(1,Math.min(20,zoom));
+  zoom=clamp(zoom,1,20);
   camX = worldX - mouseX/zoom;
   camY = worldY - mouseY/zoom;
 });
-
 canvas.addEventListener("mousemove",e=>{ mouseX=e.clientX; mouseY=e.clientY; });
-
 canvas.addEventListener("mousedown",e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; });
 canvas.addEventListener("mouseup",()=>dragging=false);
 canvas.addEventListener("mousemove",e=>{
@@ -239,10 +240,8 @@ canvas.addEventListener("mousemove",e=>{
   }
 });
 
-// ---------------------------
-// VELOCITÀ TEMPO
-// ---------------------------
-function setSpeed(f){speedFactor=f}
+// -------------------- VELOCITÀ --------------------
+function setSpeed(f){ speedFactor=f; }
 
 </script>
 </body>
